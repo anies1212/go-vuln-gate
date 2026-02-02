@@ -94,3 +94,62 @@ jobs:
           go-package: './...'
           working-directory: 'example'
           nvd-api-key: ${{ secrets.NVD_API_KEY }}
+
+  # Test using Docker image
+  test-docker:
+    name: Test Docker Image
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Build Docker image
+        run: docker build -t go-vuln-gate:test .
+
+      - name: Run go-vuln-gate via Docker (with threshold)
+        working-directory: example
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          docker run --rm \
+            -v $(pwd):/workspace \
+            -e NVD_API_KEY=$NVD_API_KEY \
+            go-vuln-gate:test \
+            --threshold 7.0 ./...
+        continue-on-error: true  # Expected to fail due to vulnerabilities
+
+      - name: Run go-vuln-gate via Docker (high threshold - should pass)
+        working-directory: example
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          docker run --rm \
+            -v $(pwd):/workspace \
+            -e NVD_API_KEY=$NVD_API_KEY \
+            go-vuln-gate:test \
+            --threshold 10.0 ./...
+
+  # Test using Docker container job
+  test-docker-container:
+    name: Test Docker Container Job
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    container:
+      image: golang:1.24-alpine
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install dependencies
+        run: apk add --no-cache git
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Build go-vuln-gate
+        run: go build -o /usr/local/bin/go-vuln-gate ./cmd/go-vuln-gate
+
+      - name: Run go-vuln-gate in container
+        working-directory: example
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: go-vuln-gate --threshold 10.0 ./...
