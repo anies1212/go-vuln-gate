@@ -40,7 +40,11 @@ inputs:
   go-version:
     description: 'Go version to use'
     required: false
-    default: '1.21'
+    default: '1.22'
+  working-directory:
+    description: 'Working directory to run the scan in'
+    required: false
+    default: '.'
 
 outputs:
   vulnerabilities-found:
@@ -60,7 +64,7 @@ runs:
   using: 'composite'
   steps:
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
       with:
         go-version: ${{ inputs.go-version }}
 
@@ -75,6 +79,7 @@ runs:
     - name: Run vulnerability scan
       id: scan
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
       env:
         NVD_API_KEY: ${{ inputs.nvd-api-key }}
       run: |
