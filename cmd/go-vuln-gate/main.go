@@ -22,14 +22,14 @@ var (
 )
 
 type config struct {
-	threshold      float64
-	cvssVersion    string
-	nvdAPIKey      string
-	outputFormat   string
-	failOnNoCVSS   bool
-	maxAgeYears    int
-	concurrency    int
-	includeAll     bool
+	threshold    float64
+	cvssVersion  string
+	nvdAPIKey    string
+	outputFormat string
+	failOnNoCVSS bool
+	maxAgeYears  int
+	concurrency  int
+	includeAll   bool
 }
 
 func main() {
