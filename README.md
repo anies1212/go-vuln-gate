@@ -1,9 +1,25 @@
 # go-vuln-gate
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/anies1212/go-vuln-gate.svg)](https://pkg.go.dev/github.com/anies1212/go-vuln-gate)
+[![CI](https://github.com/anies1212/go-vuln-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/anies1212/go-vuln-gate/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A CI/CD gate that filters govulncheck results by CVSS score threshold. Only fail your pipeline when high-severity vulnerabilities are detected.
+
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+  - [GitHub Action](#github-action-quick-start)
+  - [CLI](#cli-quick-start)
+- [CLI Installation](#cli-installation)
+  - [Docker](#docker)
+- [CLI Usage](#cli-usage)
+- [GitHub Action Usage](#github-action-usage)
+  - [Using Docker Image](#using-docker-image-in-github-actions)
+- [NVD API](#nvd-api)
+- [Output Examples](#output-examples)
+- [How It Works](#how-it-works)
 
 ## Features
 
@@ -17,21 +33,78 @@ A CI/CD gate that filters govulncheck results by CVSS score threshold. Only fail
 - **Multiple Output Formats**: text, JSON, and SARIF formats
 - **GitHub Action**: Easy integration into CI/CD pipelines
 
-## Installation
+## Quick Start
 
-### CLI
+### GitHub Action (Quick Start)
+
+```yaml
+- uses: anies1212/go-vuln-gate@v1
+  with:
+    cvss-threshold: '7.0'
+```
+
+> **Note**: The GitHub Action automatically installs `govulncheck` - no manual setup required.
+
+### CLI (Quick Start)
+
+```bash
+# 1. Install govulncheck (required)
+go install golang.org/x/vuln/cmd/govulncheck@latest
+
+# 2. Install go-vuln-gate
+go install github.com/anies1212/go-vuln-gate/cmd/go-vuln-gate@latest
+
+# 3. Run
+go-vuln-gate --threshold 7.0 ./...
+```
+
+## CLI Installation
+
+### Prerequisites
+
+- Go 1.22 or later
+- `govulncheck` (must be installed separately)
+
+### Step 1: Install govulncheck
+
+`go-vuln-gate` requires `govulncheck` to be installed and available in your PATH.
+
+```bash
+go install golang.org/x/vuln/cmd/govulncheck@latest
+```
+
+### Step 2: Install go-vuln-gate
 
 ```bash
 go install github.com/anies1212/go-vuln-gate/cmd/go-vuln-gate@latest
 ```
 
-### Prerequisites
-
-- Go 1.21 or later
-- `govulncheck` installed
+### Verify Installation
 
 ```bash
-go install golang.org/x/vuln/cmd/govulncheck@latest
+# Check govulncheck is installed
+govulncheck -version
+
+# Check go-vuln-gate is installed
+go-vuln-gate --help
+```
+
+### Pre-built Binaries
+
+Pre-built binaries are available on the [Releases](https://github.com/anies1212/go-vuln-gate/releases) page.
+
+> **Note**: Even when using pre-built binaries, you still need to install `govulncheck` separately.
+
+### Docker
+
+A Docker image with `govulncheck` pre-installed is available:
+
+```bash
+# Pull the image
+docker pull ghcr.io/anies1212/go-vuln-gate:latest
+
+# Run on your project
+docker run --rm -v $(pwd):/workspace ghcr.io/anies1212/go-vuln-gate:latest --threshold 7.0 ./...
 ```
 
 ## CLI Usage
@@ -128,6 +201,41 @@ jobs:
           sarif_file: results.sarif
 ```
 
+### Using Docker Image in GitHub Actions
+
+If your CI runs in a Docker container or you prefer using the Docker image directly:
+
+```yaml
+name: Security Scan
+
+on: [push, pull_request]
+
+jobs:
+  vuln-check:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/anies1212/go-vuln-gate:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run go-vuln-gate
+        run: go-vuln-gate --threshold 7.0 ./...
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+```
+
+Or use the Docker image directly without the composite action:
+
+```yaml
+- name: Run go-vuln-gate
+  run: |
+    docker run --rm \
+      -v ${{ github.workspace }}:/workspace \
+      -e NVD_API_KEY=${{ secrets.NVD_API_KEY }} \
+      ghcr.io/anies1212/go-vuln-gate:latest \
+      --threshold 7.0 ./...
+```
+
 ### Input Parameters
 
 | Name | Required | Default | Description |
@@ -140,7 +248,8 @@ jobs:
 | `output-format` | No | `text` | Output format |
 | `max-age` | No | `0` | Only last N years (0 = no limit) |
 | `include-all` | No | `false` | Include all vulnerabilities |
-| `go-version` | No | `1.21` | Go version |
+| `go-version` | No | `1.22` | Go version |
+| `working-directory` | No | `.` | Working directory to run the scan in |
 
 ### Outputs
 
