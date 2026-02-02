@@ -1,6 +1,6 @@
 module github.com/anies1212/go-vuln-gate
 
-go 1.25.6
+go 1.22
 
 require (
 	github.com/spf13/cobra v1.10.2
