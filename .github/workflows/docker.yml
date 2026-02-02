@@ -3,7 +3,7 @@ name: Docker
 on:
   push:
     tags:
-      - 'v*'
+      - 'v[0-9]+.[0-9]+.[0-9]+'  # Only semantic version tags (v1.0.0, v1.1.0, etc.)
   workflow_dispatch:
 
 permissions:
