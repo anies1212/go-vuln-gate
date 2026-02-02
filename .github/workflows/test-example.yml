@@ -1,0 +1,95 @@
+name: Test Example
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Test with NVD API key (faster, parallel requests)
+  test-with-api-key:
+    name: Test with NVD API Key
+    runs-on: ubuntu-latest
+    # Only run on push to main (where secrets are available)
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Build go-vuln-gate
+        run: go build -o go-vuln-gate ./cmd/go-vuln-gate
+
+      - name: Run go-vuln-gate on example (with API key)
+        working-directory: example
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          ../go-vuln-gate --threshold 7.0 ./...
+        continue-on-error: true  # Expected to fail due to vulnerabilities
+
+      - name: Run go-vuln-gate with JSON output
+        working-directory: example
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          ../go-vuln-gate --threshold 7.0 --output json ./... || true
+
+      - name: Run go-vuln-gate with high threshold (should pass)
+        working-directory: example
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          ../go-vuln-gate --threshold 10.0 ./...
+
+  # Test without NVD API key (slower, rate limited)
+  test-without-api-key:
+    name: Test without NVD API Key
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Build go-vuln-gate
+        run: go build -o go-vuln-gate ./cmd/go-vuln-gate
+
+      - name: Run go-vuln-gate on example (without API key)
+        working-directory: example
+        run: |
+          echo "Running without NVD API key (rate limited)..."
+          ../go-vuln-gate --threshold 7.0 ./...
+        continue-on-error: true  # Expected to fail due to vulnerabilities
+
+      - name: Run go-vuln-gate with high threshold (should pass)
+        working-directory: example
+        run: |
+          ../go-vuln-gate --threshold 10.0 ./...
+
+  # Test using the GitHub Action
+  test-action:
+    name: Test GitHub Action
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run go-vuln-gate action on example
+        uses: ./
+        with:
+          cvss-threshold: '10.0'  # High threshold to pass
+          go-package: './example/...'
+          nvd-api-key: ${{ secrets.NVD_API_KEY }}
