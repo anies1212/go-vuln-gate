@@ -160,7 +160,12 @@ func (r *Runner) Run(ctx context.Context, targetPath string) (*Result, error) {
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if exitErr.ExitCode() != 3 {
-				return nil, fmt.Errorf("govulncheck failed: %w\nstderr: %s", err, stderr.String())
+				stderrStr := stderr.String()
+				// Provide helpful message for common errors
+				if strings.Contains(stderrStr, "package") && strings.Contains(stderrStr, "without types") {
+					return nil, fmt.Errorf("govulncheck failed: %w\nstderr: %s\n\nThis error often occurs due to dependency resolution issues. Try:\n1. Run 'go mod tidy' to clean up dependencies\n2. Run 'go mod download' to fetch all dependencies\n3. Ensure your Go version matches the project requirements", err, stderrStr)
+				}
+				return nil, fmt.Errorf("govulncheck failed: %w\nstderr: %s", err, stderrStr)
 			}
 		} else {
 			return nil, fmt.Errorf("failed to run govulncheck: %w", err)
