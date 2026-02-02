@@ -1,0 +1,123 @@
+name: 'Go Vulnerability Gate'
+description: 'Filter govulncheck results by CVSS score threshold'
+author: 'anies1212'
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  cvss-threshold:
+    description: 'CVSS score threshold (vulnerabilities at or above this score will cause failure)'
+    required: false
+    default: '7.0'
+  cvss-version:
+    description: 'CVSS version to use (v2, v3, v4)'
+    required: false
+    default: 'v3'
+  go-package:
+    description: 'Go package to scan'
+    required: false
+    default: './...'
+  nvd-api-key:
+    description: 'NVD API key for faster rate limits'
+    required: false
+  fail-on-no-cvss:
+    description: 'Fail if vulnerabilities without CVSS score are found'
+    required: false
+    default: 'false'
+  output-format:
+    description: 'Output format (text, json, sarif)'
+    required: false
+    default: 'text'
+  max-age:
+    description: 'Only check vulnerabilities published within the last N years (0 = no limit)'
+    required: false
+    default: '0'
+  include-all:
+    description: 'Include all vulnerabilities, not just those called by your code'
+    required: false
+    default: 'false'
+  go-version:
+    description: 'Go version to use'
+    required: false
+    default: '1.21'
+
+outputs:
+  vulnerabilities-found:
+    description: 'Whether vulnerabilities above threshold were found'
+    value: ${{ steps.scan.outputs.vulnerabilities-found }}
+  vulnerability-count:
+    description: 'Number of vulnerabilities above threshold'
+    value: ${{ steps.scan.outputs.vulnerability-count }}
+  highest-cvss:
+    description: 'Highest CVSS score found'
+    value: ${{ steps.scan.outputs.highest-cvss }}
+  report:
+    description: 'Full JSON report'
+    value: ${{ steps.scan.outputs.report }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go-version }}
+
+    - name: Install govulncheck
+      shell: bash
+      run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+    - name: Install go-vuln-gate
+      shell: bash
+      run: go install github.com/anies1212/go-vuln-gate/cmd/go-vuln-gate@latest
+
+    - name: Run vulnerability scan
+      id: scan
+      shell: bash
+      env:
+        NVD_API_KEY: ${{ inputs.nvd-api-key }}
+      run: |
+        set +e
+
+        ARGS="--threshold ${{ inputs.cvss-threshold }}"
+        ARGS="$ARGS --cvss-version ${{ inputs.cvss-version }}"
+        ARGS="$ARGS --output ${{ inputs.output-format }}"
+
+        if [ "${{ inputs.fail-on-no-cvss }}" = "true" ]; then
+          ARGS="$ARGS --fail-on-no-cvss"
+        fi
+
+        if [ "${{ inputs.max-age }}" != "0" ]; then
+          ARGS="$ARGS --max-age ${{ inputs.max-age }}"
+        fi
+
+        if [ "${{ inputs.include-all }}" = "true" ]; then
+          ARGS="$ARGS --include-all"
+        fi
+
+        OUTPUT=$(go-vuln-gate $ARGS ${{ inputs.go-package }} 2>&1)
+        EXIT_CODE=$?
+
+        echo "$OUTPUT"
+
+        if [ "${{ inputs.output-format }}" = "json" ]; then
+          REPORT=$(echo "$OUTPUT" | jq -c '.')
+          echo "report=$REPORT" >> $GITHUB_OUTPUT
+
+          VULN_COUNT=$(echo "$OUTPUT" | jq -r '.summary.filtered_vulnerabilities // 0')
+          HIGHEST=$(echo "$OUTPUT" | jq -r '.summary.highest_score // 0')
+          FOUND=$(echo "$OUTPUT" | jq -r '.summary.should_fail // false')
+
+          echo "vulnerability-count=$VULN_COUNT" >> $GITHUB_OUTPUT
+          echo "highest-cvss=$HIGHEST" >> $GITHUB_OUTPUT
+          echo "vulnerabilities-found=$FOUND" >> $GITHUB_OUTPUT
+        else
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "vulnerabilities-found=true" >> $GITHUB_OUTPUT
+          else
+            echo "vulnerabilities-found=false" >> $GITHUB_OUTPUT
+          fi
+        fi
+
+        exit $EXIT_CODE
